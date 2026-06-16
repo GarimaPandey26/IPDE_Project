@@ -14,7 +14,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: 'Name, Email, Password, and Role are required' });
     }
 
-    if (!['Manufacturer', 'Viewer'].includes(role)) {
+    if (!['Manufacturer', 'Viewer', 'Admin'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role selection' });
     }
 

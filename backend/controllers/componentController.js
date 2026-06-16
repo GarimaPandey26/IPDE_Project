@@ -4,6 +4,10 @@ const Data = require('../models/Data');
 // Create a new Component
 exports.createComponent = async (req, res) => {
   try {
+    if (req.user.role !== 'Admin') {
+      return res.status(403).json({ error: 'Access Denied: Only Admins can add components to the system hierarchy' });
+    }
+
     const { name, type, category, parentId } = req.body;
 
     if (!name || !type || !category) {
@@ -71,12 +75,13 @@ exports.connectComponents = async (req, res) => {
       return res.status(400).json({ error: 'Cannot connect a component to itself' });
     }
 
-    // Role-based authorization: Only assigned manufacturers of either A or B can create connections
+    // Role-based authorization: Only Admin OR assigned manufacturer of either A or B can create connections
+    const isAdmin = req.user.role === 'Admin';
     const isAssignedToA = req.user.role === 'Manufacturer' && req.user.assignedComponent?.toString() === componentIdA;
     const isAssignedToB = req.user.role === 'Manufacturer' && req.user.assignedComponent?.toString() === componentIdB;
     
-    if (req.user.role !== 'Manufacturer' || (!isAssignedToA && !isAssignedToB)) {
-      return res.status(403).json({ error: 'Only the assigned manufacturer of these components can modify connections' });
+    if (!isAdmin && (!isAssignedToA && !isAssignedToB)) {
+      return res.status(403).json({ error: 'Only Admins or the assigned manufacturer of these components can modify connections' });
     }
 
     const compA = await Component.findById(componentIdA);
@@ -127,14 +132,14 @@ exports.uploadFile = async (req, res) => {
       return res.status(400).json({ error: 'Invalid standardized data category' });
     }
 
-    // Manufacturer Access Control: Must be a Manufacturer AND assigned to this exact component
-    if (req.user.role !== 'Manufacturer') {
-      return res.status(403).json({ error: 'Upload denied: Only Manufacturers can upload files' });
-    }
+    // Admin or Manufacturer Access Control
+    const isAdmin = req.user.role === 'Admin';
+    const isManufacturer = req.user.role === 'Manufacturer';
+    const isAssigned = req.user.assignedComponent && (req.user.assignedComponent._id?.toString() === id || req.user.assignedComponent.toString() === id);
 
-    if (!req.user.assignedComponent || req.user.assignedComponent._id.toString() !== id) {
+    if (!isAdmin && (!isManufacturer || !isAssigned)) {
       return res.status(403).json({ 
-        error: `Upload denied: You are only allowed to upload files to your assigned component: "${req.user.assignedComponent?.name || 'none'}"`
+        error: `Upload denied: You must be an Admin or the assigned manufacturer of this component ("${req.user.assignedComponent?.name || 'none'}") to upload files`
       });
     }
 

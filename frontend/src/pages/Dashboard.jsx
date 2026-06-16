@@ -186,6 +186,8 @@ const Dashboard = ({ onNavigate, currentUser }) => {
     currentUser.assignedComponent && 
     (currentUser.assignedComponent._id === selectedNode._id || currentUser.assignedComponent === selectedNode._id);
 
+  const hasWriteAccess = currentUser.role === 'Admin' || isAssignedManufacturer;
+
   // Filter files belonging to active component & category tab
   const getTabFiles = () => {
     if (!selectedNode || !selectedNode.dataHistory) return [];
@@ -208,7 +210,18 @@ const Dashboard = ({ onNavigate, currentUser }) => {
       <div className="dashboard-layout-new">
         {/* Sidebar Navigation Tree */}
         <div className="dashboard-sidebar">
-          <h3>Radar Hierarchy</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '0.25rem' }}>
+            <h3 style={{ margin: 0 }}>Radar Hierarchy</h3>
+            {currentUser.role === 'Admin' && (
+              <button 
+                className="btn btn-primary" 
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', boxShadow: 'none' }}
+                onClick={() => setIsCreateOpen(true)}
+              >
+                + Add Node
+              </button>
+            )}
+          </div>
           
           <input 
             type="text" 
@@ -271,7 +284,7 @@ const Dashboard = ({ onNavigate, currentUser }) => {
                 </div>
 
                 <div className="detail-action-block">
-                  {isAssignedManufacturer ? (
+                  {hasWriteAccess ? (
                     <>
                       <button className="btn btn-secondary" onClick={() => setIsConnectOpen(true)}>
                         Link Component
@@ -313,7 +326,7 @@ const Dashboard = ({ onNavigate, currentUser }) => {
                 {currentTabFiles.length === 0 ? (
                   <div className="empty-state" style={{ padding: '2.5rem' }}>
                     <p style={{ margin: 0 }}>No records found under the <strong>{activeTab}</strong> category for this node.</p>
-                    {isAssignedManufacturer && (
+                    {hasWriteAccess && (
                       <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => onNavigate('upload', selectedNode._id)}>
                         Upload First Version
                       </button>

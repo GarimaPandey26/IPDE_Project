@@ -987,6 +987,11 @@ body {
   color: var(--secondary);
   border: 1px solid rgba(99, 102, 241, 0.3);
 }
+.badge-admin {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
 .btn-logout {
   background-color: rgba(239, 68, 68, 0.1);
   color: var(--danger);

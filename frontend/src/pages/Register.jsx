@@ -141,6 +141,7 @@ const Register = ({ onAuthSuccess, onNavigateToLogin }) => {
             >
               <option value="Viewer">Viewer / Observer (Read-Only Access)</option>
               <option value="Manufacturer">Manufacturer (Write Access for Assigned Component)</option>
+              <option value="Admin">Admin (Full System Write Access)</option>
             </select>
           </div>
 

@@ -91,7 +91,9 @@ function App() {
             <span className="profile-name">{currentUser.name}</span>
             <div className="profile-role-badge">
               <span className={`badge badge-${currentUser.role.toLowerCase()}`}>
-                {currentUser.role === 'Manufacturer' 
+                {currentUser.role === 'Admin'
+                  ? 'Admin'
+                  : currentUser.role === 'Manufacturer' 
                   ? `Mfg: ${currentUser.assignedComponent?.name || 'Unassigned'}` 
                   : 'Viewer'}
               </span>

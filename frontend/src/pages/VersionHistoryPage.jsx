@@ -39,6 +39,8 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
     currentUser.assignedComponent && 
     (currentUser.assignedComponent._id === componentId || currentUser.assignedComponent === componentId);
 
+  const hasWriteAccess = currentUser.role === 'Admin' || isAssigned;
+
   return (
     <div className="history-container">
       <div className="page-header">
@@ -52,7 +54,7 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
           <button className="btn btn-secondary" onClick={() => onNavigate('dashboard')}>
             Back to Dashboard
           </button>
-          {isAssigned ? (
+          {hasWriteAccess ? (
             <button className="btn btn-primary" onClick={() => onNavigate('upload', componentId)}>
               Upload New Version
             </button>
@@ -75,7 +77,7 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
           <div className="empty-state">
             <h3>No Version Logs</h3>
             <p>This component does not have any files uploaded yet.</p>
-            {isAssigned && (
+            {hasWriteAccess && (
               <button className="btn btn-primary" onClick={() => onNavigate('upload', componentId)}>
                 Upload First Version
               </button>

@@ -45,6 +45,8 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
     currentUser.assignedComponent && 
     (currentUser.assignedComponent._id === selectedCompId || currentUser.assignedComponent === selectedCompId);
 
+  const hasWriteAccess = currentUser.role === 'Admin' || isAssigned;
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!selectedCompId) {
@@ -60,7 +62,7 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
       return;
     }
 
-    if (!isAssigned) {
+    if (!hasWriteAccess) {
       setError('Permission Denied: You cannot upload files to other components.');
       return;
     }
@@ -124,9 +126,9 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
               </select>
             </div>
 
-            {selectedCompId && !isAssigned && (
+            {selectedCompId && !hasWriteAccess && (
               <div className="alert alert-error" style={{ fontSize: '0.85rem' }}>
-                🔒 <strong>Read-Only Warning:</strong> You are not registered as the manufacturer for <em>"{selectedCompName}"</em>. You cannot upload records here.
+                🔒 <strong>Read-Only Warning:</strong> You must be an Admin or the registered manufacturer for <em>"{selectedCompName}"</em>. You cannot upload records here.
               </div>
             )}
 
@@ -136,7 +138,7 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
                 id="cat-select"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                disabled={loading || !isAssigned}
+                disabled={loading || !hasWriteAccess}
                 required
               >
                 {allowedCategories.map(cat => (
@@ -153,7 +155,7 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
                 placeholder="e.g. Updated specifications to meet naval temperature tests"
                 value={changeDescription}
                 onChange={(e) => setChangeDescription(e.target.value)}
-                disabled={loading || !isAssigned}
+                disabled={loading || !hasWriteAccess}
                 required
               />
             </div>
@@ -165,7 +167,7 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
                   id="file-input"
                   type="file"
                   onChange={handleFileChange}
-                  disabled={loading || !isAssigned}
+                  disabled={loading || !hasWriteAccess}
                   required
                 />
               </div>
@@ -174,7 +176,7 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
             <button 
               type="submit" 
               className="btn btn-primary btn-block" 
-              disabled={loading || !isAssigned}
+              disabled={loading || !hasWriteAccess}
             >
               {loading ? 'Uploading & Traversing Graph...' : 'Upload & Commit Version'}
             </button>
