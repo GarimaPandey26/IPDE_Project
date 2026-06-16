@@ -25,14 +25,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Protected API Endpoints
-router.use(auth); // Apply JWT authentication to all component routes
-
-router.post('/', componentController.createComponent);
+// API Endpoints
+// Read-only endpoints are public to allow registration dropdown and viewer browsing
 router.get('/', componentController.getComponents);
-router.post('/connect', componentController.connectComponents);
-router.post('/:id/upload', upload.single('file'), componentController.uploadFile);
 router.get('/:id/history', componentController.getVersionHistory);
 router.get('/download/:dataId', componentController.downloadFile);
+
+// Write/Modify endpoints are protected and require JWT authentication
+router.post('/', auth, componentController.createComponent);
+router.post('/connect', auth, componentController.connectComponents);
+router.post('/:id/upload', auth, upload.single('file'), componentController.uploadFile);
 
 module.exports = router;
