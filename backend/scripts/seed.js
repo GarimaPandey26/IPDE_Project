@@ -16,8 +16,7 @@ const seedData = async () => {
     console.log('Clearing database tables...');
     await Component.deleteMany({});
     await Data.deleteMany({});
-    // We do NOT clear users here to prevent logging out developer accounts,
-    // but we will reset component assignments just in case.
+    // Reset component assignments for users
     await User.updateMany({}, { assignedComponent: null });
     console.log('Database tables cleared.');
 
@@ -40,99 +39,17 @@ const seedData = async () => {
     ];
 
     console.log('Seeding 14 Root Modules...');
-    const rootModules = {};
-
     for (const def of rootModulesDefs) {
       const module = new Component({
         name: def.name,
-        type: 'Module',
+        type: 'Module', // Since they are the root modules
         category: def.category,
         parent: null
       });
       await module.save();
-      rootModules[def.name] = module;
     }
-    console.log('Root Modules seeded successfully.');
 
-    // Seed Sub-modules under Signal Processing Unit
-    console.log('Seeding sub-modules under Signal Processing Unit...');
-    const signalProcessingUnit = rootModules['Signal Processing Unit'];
-
-    const adc = new Component({
-      name: 'Analog-to-Digital Converter (ADC)',
-      type: 'Sub-module',
-      category: 'Signal Processing Components',
-      parent: signalProcessingUnit._id
-    });
-    await adc.save();
-
-    const dsp = new Component({
-      name: 'Digital Signal Processor (DSP)',
-      type: 'Sub-module',
-      category: 'Signal Processing Components',
-      parent: signalProcessingUnit._id
-    });
-    await dsp.save();
-
-    const clutterFilters = new Component({
-      name: 'Clutter Filters',
-      type: 'Sub-module',
-      category: 'Signal Processing Components',
-      parent: signalProcessingUnit._id
-    });
-    await clutterFilters.save();
-
-    // Seed Components under Digital Signal Processor (DSP)
-    console.log('Seeding components under Digital Signal Processor (DSP)...');
-    
-    const fftModules = new Component({
-      name: 'FFT Modules',
-      type: 'Component',
-      category: 'Software Components',
-      parent: dsp._id
-    });
-    await fftModules.save();
-
-    const dopplerFilter = new Component({
-      name: 'Doppler Filter',
-      type: 'Component',
-      category: 'Signal Processing Components',
-      parent: dsp._id
-    });
-    await dopplerFilter.save();
-
-    const memory = new Component({
-      name: 'Memory',
-      type: 'Component',
-      category: 'Storage Components',
-      parent: dsp._id
-    });
-    await memory.save();
-
-    const ioInterfaces = new Component({
-      name: 'I/O Interfaces',
-      type: 'Component',
-      category: 'Control Components',
-      parent: dsp._id
-    });
-    await ioInterfaces.save();
-
-    // Let's establish some connections for BFS test
-    console.log('Connecting components for BFS traversal test...');
-    
-    // Connect FFT Modules and Doppler Filter
-    fftModules.connectedComponents.push(dopplerFilter._id);
-    dopplerFilter.connectedComponents.push(fftModules._id);
-    await fftModules.save();
-    await dopplerFilter.save();
-
-    // Connect DSP and Clutter Filters
-    dsp.connectedComponents.push(clutterFilters._id);
-    clutterFilters.connectedComponents.push(dsp._id);
-    await dsp.save();
-    await clutterFilters.save();
-
-    console.log('Database Seeding Completed Successfully! 🎉');
+    console.log('Database Seeding Completed Successfully with exactly 14 modules! 🎉');
     process.exit(0);
   } catch (error) {
     console.error('Error seeding database:', error.message);
