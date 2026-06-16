@@ -7,6 +7,7 @@ const connectDB = async () => {
   await conn();
 };
 const componentRoutes = require('./routes/componentRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/components', componentRoutes);
 
 // Serve Frontend in Production

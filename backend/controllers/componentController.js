@@ -4,10 +4,14 @@ const Data = require('../models/Data');
 // Create a new Component
 exports.createComponent = async (req, res) => {
   try {
-    const { name, type } = req.body;
+    const { name, type, category, parentId } = req.body;
 
-    if (!name || !type) {
-      return res.status(400).json({ error: 'Name and Type are required' });
+    if (!name || !type || !category) {
+      return res.status(400).json({ error: 'Name, Type, and Category are required' });
+    }
+
+    if (!['Module', 'Sub-module', 'Component'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid component type' });
     }
 
     const existingComponent = await Component.findOne({ name });
@@ -15,7 +19,16 @@ exports.createComponent = async (req, res) => {
       return res.status(400).json({ error: 'A component with this name already exists' });
     }
 
-    const component = new Component({ name, type });
+    let parent = null;
+    if (parentId) {
+      const parentComponent = await Component.findById(parentId);
+      if (!parentComponent) {
+        return res.status(404).json({ error: 'Parent component not found' });
+      }
+      parent = parentComponent._id;
+    }
+
+    const component = new Component({ name, type, category, parent });
     await component.save();
 
     res.status(201).json(component);
@@ -24,14 +37,19 @@ exports.createComponent = async (req, res) => {
   }
 };
 
-// Retrieve all Components with their connections and latest data version
+// Retrieve all Components with their connections, parent relationships, and full data history
 exports.getComponents = async (req, res) => {
   try {
     const components = await Component.find()
+      .populate('parent', 'name type')
       .populate('connectedComponents', 'name type')
       .populate({
         path: 'dataHistory',
-        options: { sort: { versionNumber: -1 } } // Sort history descending
+        options: { sort: { versionNumber: -1 } },
+        populate: {
+          path: 'uploadedBy',
+          select: 'name email role'
+        }
       });
 
     res.status(200).json(components);
@@ -51,6 +69,14 @@ exports.connectComponents = async (req, res) => {
 
     if (componentIdA === componentIdB) {
       return res.status(400).json({ error: 'Cannot connect a component to itself' });
+    }
+
+    // Role-based authorization: Only assigned manufacturers of either A or B can create connections
+    const isAssignedToA = req.user.role === 'Manufacturer' && req.user.assignedComponent?.toString() === componentIdA;
+    const isAssignedToB = req.user.role === 'Manufacturer' && req.user.assignedComponent?.toString() === componentIdB;
+    
+    if (req.user.role !== 'Manufacturer' || (!isAssignedToA && !isAssignedToB)) {
+      return res.status(403).json({ error: 'Only the assigned manufacturer of these components can modify connections' });
     }
 
     const compA = await Component.findById(componentIdA);
@@ -82,12 +108,34 @@ exports.connectComponents = async (req, res) => {
   }
 };
 
-// Upload file for a component (handles version control + affected components traversal)
+// Upload file for a component (handles version control + category-specific history + RBAC)
 exports.uploadFile = async (req, res) => {
   try {
     const { id } = req.params; // Component ID
+    const { category, changeDescription } = req.body;
+
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    if (!category) {
+      return res.status(400).json({ error: 'Standardized data category is required' });
+    }
+
+    const allowedCategories = ['Design Data', 'Procurement Data', 'Production Data', 'Performance Data'];
+    if (!allowedCategories.includes(category)) {
+      return res.status(400).json({ error: 'Invalid standardized data category' });
+    }
+
+    // Manufacturer Access Control: Must be a Manufacturer AND assigned to this exact component
+    if (req.user.role !== 'Manufacturer') {
+      return res.status(403).json({ error: 'Upload denied: Only Manufacturers can upload files' });
+    }
+
+    if (!req.user.assignedComponent || req.user.assignedComponent._id.toString() !== id) {
+      return res.status(403).json({ 
+        error: `Upload denied: You are only allowed to upload files to your assigned component: "${req.user.assignedComponent?.name || 'none'}"`
+      });
     }
 
     const component = await Component.findById(id);
@@ -95,8 +143,8 @@ exports.uploadFile = async (req, res) => {
       return res.status(404).json({ error: 'Component not found' });
     }
 
-    // Find latest version of data for this component
-    const latestData = await Data.findOne({ componentId: id }).sort({ versionNumber: -1 });
+    // Find latest version of data for this component in this specific category
+    const latestData = await Data.findOne({ componentId: id, category }).sort({ versionNumber: -1 });
 
     let nextVersionNumber = 1;
     let previousVersionId = null;
@@ -115,6 +163,9 @@ exports.uploadFile = async (req, res) => {
       filePath: req.file.path,
       mimeType: req.file.mimetype,
       fileSize: req.file.size,
+      category,
+      uploadedBy: req.user._id,
+      changeDescription: changeDescription || `Initial release of ${category}`,
       versionNumber: nextVersionNumber,
       version: versionStr,
       previousVersion: previousVersionId
@@ -128,6 +179,9 @@ exports.uploadFile = async (req, res) => {
 
     // BFS graph traversal to find affected components
     const affectedComponents = await getAffectedComponents(id);
+
+    // Populate creator detail on return
+    await newData.populate('uploadedBy', 'name email role');
 
     res.status(201).json({
       message: 'File uploaded successfully',
@@ -149,13 +203,14 @@ exports.getVersionHistory = async (req, res) => {
       return res.status(404).json({ error: 'Component not found' });
     }
 
-    // Get all version records for this component
+    // Get all version records for this component (populated with uploader & previous version)
     const history = await Data.find({ componentId: id })
       .sort({ versionNumber: -1 })
-      .populate('previousVersion', 'version fileName');
+      .populate('uploadedBy', 'name email role')
+      .populate('previousVersion', 'version fileName category');
 
     res.status(200).json({
-      component: { id: component._id, name: component.name, type: component.type },
+      component: { id: component._id, name: component.name, type: component.type, category: component.category },
       history
     });
   } catch (error) {

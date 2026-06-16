@@ -20,6 +20,24 @@ const dataSchema = new mongoose.Schema({
   fileSize: {
     type: Number,
   },
+  category: {
+    type: String,
+    required: true,
+    enum: ['Design Data', 'Procurement Data', 'Production Data', 'Performance Data'],
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  changeDescription: {
+    type: String,
+    default: '',
+  },
+  status: {
+    type: String,
+    default: 'Active',
+  },
   versionNumber: {
     type: Number,
     required: true,

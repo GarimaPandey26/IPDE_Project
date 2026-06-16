@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const componentController = require('../controllers/componentController');
+const auth = require('../middleware/auth');
 
 // Ensure upload directory exists
 const uploadDir = path.join(__dirname, '../uploads');
@@ -17,8 +18,6 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    // Generate a clean filename: version number/original name can be stored in DB,
-    // but actual disk filename is made unique to avoid conflicts.
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -26,7 +25,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// API Endpoints
+// Protected API Endpoints
+router.use(auth); // Apply JWT authentication to all component routes
+
 router.post('/', componentController.createComponent);
 router.get('/', componentController.getComponents);
 router.post('/connect', componentController.connectComponents);
