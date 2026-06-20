@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const Component = require('../models/Component');
 
 // Retrieve notifications based on role
 exports.getNotifications = async (req, res) => {
@@ -49,7 +50,7 @@ exports.getUnreadCount = async (req, res) => {
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     let query = { _id: id };
     if (req.user.role === 'Manufacturer') {
       // Manufacturers can only update their own notifications
@@ -66,6 +67,16 @@ exports.markAsRead = async (req, res) => {
 
     notification.status = 'Read';
     await notification.save();
+
+    // Check if there are any remaining unread notifications for this affected component
+    const unreadCount = await Notification.countDocuments({
+      affectedComponent: notification.affectedComponent,
+      status: 'Unread'
+    });
+
+    if (unreadCount === 0) {
+      await Component.findByIdAndUpdate(notification.affectedComponent, { status: 'Active' });
+    }
 
     res.status(200).json(notification);
   } catch (error) {
