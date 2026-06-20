@@ -48,6 +48,11 @@ const componentSchema = new mongoose.Schema({
       ref: 'Data',
     }
   ],
+  status: {
+    type: String,
+    enum: ['Active', 'Review Required'],
+    default: 'Active',
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -55,3 +60,4 @@ const componentSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Component', componentSchema);
+

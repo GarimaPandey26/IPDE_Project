@@ -4,6 +4,11 @@ import UploadPage from './pages/UploadPage';
 import VersionHistoryPage from './pages/VersionHistoryPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import DependenciesPage from './pages/DependenciesPage';
+import NotificationsPage from './pages/NotificationsPage';
+import ImpactAnalysisPage from './pages/ImpactAnalysisPage';
+import VersionComparePage from './pages/VersionComparePage';
+import { getUnreadNotificationsCount } from './services/api';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
@@ -11,6 +16,8 @@ function App() {
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [selectedCompId, setSelectedCompId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [compareVersions, setCompareVersions] = useState({ versionAId: '', versionBId: '' });
 
   // Parse user object from local storage on mount
   useEffect(() => {
@@ -23,6 +30,26 @@ function App() {
       }
     }
   }, [token]);
+
+  const fetchUnreadCount = async () => {
+    if (token) {
+      try {
+        const data = await getUnreadNotificationsCount();
+        setUnreadCount(data.count);
+      } catch (err) {
+        console.error('Failed to fetch unread count:', err);
+      }
+    }
+  };
+
+  // Poll for unread notification count
+  useEffect(() => {
+    if (token) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [token, currentUser]);
 
   const handleAuthSuccess = (user) => {
     setToken(localStorage.getItem('token') || '');
@@ -38,10 +65,17 @@ function App() {
     setAuthMode('login');
     setCurrentPage('dashboard');
     setSelectedCompId(null);
+    setUnreadCount(0);
   };
 
-  const handleNavigate = (page, componentId = null) => {
+  const handleNavigate = (page, componentId = null, extraParams = null) => {
     setSelectedCompId(componentId);
+    if (page === 'compare' && extraParams) {
+      setCompareVersions({
+        versionAId: extraParams.versionAId,
+        versionBId: extraParams.versionBId
+      });
+    }
     setCurrentPage(page);
   };
 
@@ -82,6 +116,18 @@ function App() {
           </li>
           <li className={currentPage === 'upload' ? 'active' : ''}>
             <button onClick={() => handleNavigate('upload')}>Upload Center</button>
+          </li>
+          <li className={currentPage === 'dependencies' ? 'active' : ''}>
+            <button onClick={() => handleNavigate('dependencies')}>Dependencies & Graph</button>
+          </li>
+          <li className={currentPage === 'impact-analysis' ? 'active' : ''}>
+            <button onClick={() => handleNavigate('impact-analysis')}>Impact Analysis</button>
+          </li>
+          <li className={currentPage === 'notifications' ? 'active' : ''}>
+            <button onClick={() => handleNavigate('notifications')} className="nav-notif-btn">
+              Notifications
+              {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
+            </button>
           </li>
         </ul>
 
@@ -124,6 +170,35 @@ function App() {
             currentUser={currentUser}
           />
         )}
+        {currentPage === 'dependencies' && (
+          <DependenciesPage 
+            onNavigate={handleNavigate} 
+            currentUser={currentUser}
+          />
+        )}
+        {currentPage === 'impact-analysis' && (
+          <ImpactAnalysisPage 
+            preSelectedComponentId={selectedCompId}
+            onNavigate={handleNavigate} 
+            currentUser={currentUser}
+          />
+        )}
+        {currentPage === 'notifications' && (
+          <NotificationsPage 
+            onNavigate={handleNavigate} 
+            currentUser={currentUser}
+            onNotificationRead={fetchUnreadCount}
+          />
+        )}
+        {currentPage === 'compare' && (
+          <VersionComparePage 
+            componentId={selectedCompId}
+            versionAId={compareVersions.versionAId}
+            versionBId={compareVersions.versionBId}
+            onNavigate={handleNavigate} 
+            currentUser={currentUser}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -135,3 +210,4 @@ function App() {
 }
 
 export default App;
+

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { getVersionHistory } from '../services/api';
+import { getVersionHistory, getComponents } from '../services/api';
 
 const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
   const [component, setComponent] = useState(null);
   const [history, setHistory] = useState([]);
+  const [components, setComponents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedVersions, setSelectedVersions] = useState([]);
 
   useEffect(() => {
     if (!componentId) {
@@ -14,12 +16,16 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
       return;
     }
 
-    const fetchHistory = async () => {
+    const fetchHistoryAndComponents = async () => {
       setLoading(true);
       try {
-        const data = await getVersionHistory(componentId);
-        setComponent(data.component);
-        setHistory(data.history);
+        const [historyData, componentsData] = await Promise.all([
+          getVersionHistory(componentId),
+          getComponents()
+        ]);
+        setComponent(historyData.component);
+        setHistory(historyData.history);
+        setComponents(componentsData);
       } catch (err) {
         setError('Failed to load version history.');
       } finally {
@@ -27,19 +33,57 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
       }
     };
 
-    fetchHistory();
+    fetchHistoryAndComponents();
   }, [componentId]);
+
+  const handleCheckboxChange = (versionId) => {
+    setSelectedVersions(prev => {
+      if (prev.includes(versionId)) {
+        return prev.filter(id => id !== versionId);
+      } else {
+        if (prev.length >= 2) {
+          alert('You can only select up to two versions for comparison.');
+          return prev;
+        }
+        return [...prev, versionId];
+      }
+    });
+  };
+
+  const handleCompareClick = () => {
+    if (selectedVersions.length !== 2) {
+      alert('Please select exactly two versions to compare.');
+      return;
+    }
+    // Navigate to compare page, passing the two version IDs as extra parameters
+    onNavigate('compare', componentId, {
+      versionAId: selectedVersions[0],
+      versionBId: selectedVersions[1]
+    });
+  };
+
+  // Enforce hierarchical manufacturer permissions: check parent component chain
+  const checkWriteAccess = (user, compId) => {
+    if (!user || !compId) return false;
+    if (user.role === 'Admin') return true;
+    if (user.role === 'Viewer') return false;
+    if (user.role === 'Manufacturer') {
+      const assignedId = user.assignedComponent?._id || user.assignedComponent;
+      if (!assignedId) return false;
+      let currentId = compId;
+      while (currentId) {
+        if (currentId === assignedId) return true;
+        const comp = components.find(c => c._id === currentId);
+        currentId = comp && comp.parent ? (comp.parent._id || comp.parent) : null;
+      }
+    }
+    return false;
+  };
+
+  const hasWriteAccess = checkWriteAccess(currentUser, componentId);
 
   if (loading) return <div className="loading-state">Loading history logs...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
-
-  // Access Control: Only the assigned manufacturer of this component can upload new versions
-  const isAssigned = component && 
-    currentUser.role === 'Manufacturer' && 
-    currentUser.assignedComponent && 
-    (currentUser.assignedComponent._id === componentId || currentUser.assignedComponent === componentId);
-
-  const hasWriteAccess = currentUser.role === 'Admin' || isAssigned;
 
   return (
     <div className="history-container">
@@ -73,6 +117,24 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
           </p>
         </div>
 
+        {/* Version Comparison Selector Toolbar */}
+        {history.length > 1 && (
+          <div className="lineage-description-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'var(--primary)', borderLeftWidth: '4px' }}>
+            <div>
+              <h4 style={{ color: 'var(--primary)', margin: 0 }}>Compare Document Versions</h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Select exactly two versions from the list below to compare metadata and change logs.</p>
+            </div>
+            <button 
+              className="btn btn-primary" 
+              onClick={handleCompareClick} 
+              disabled={selectedVersions.length !== 2}
+              style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+            >
+              Compare ({selectedVersions.length}/2 Selected)
+            </button>
+          </div>
+        )}
+
         {history.length === 0 ? (
           <div className="empty-state">
             <h3>No Version Logs</h3>
@@ -99,7 +161,17 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
                   <div className="timeline-card">
                     <div className="timeline-card-header">
                       <div>
-                        <h4>{item.fileName}</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          {history.length > 1 && (
+                            <input 
+                              type="checkbox" 
+                              checked={selectedVersions.includes(item._id)}
+                              onChange={() => handleCheckboxChange(item._id)}
+                              style={{ width: '16px', height: '16px', cursor: 'pointer', margin: 0 }}
+                            />
+                          )}
+                          <h4 style={{ margin: 0 }}>{item.fileName}</h4>
+                        </div>
                         <span className="badge badge-manufacturer" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', marginTop: '0.25rem', display: 'inline-block' }}>
                           {item.category}
                         </span>
@@ -125,7 +197,7 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
                         <span><strong>Pointer:</strong> <code>{item._id}</code></span>
                         {item.previousVersion ? (
                           <span className="parent-pointer">
-                            <strong>Parent:</strong> <code>{item.previousVersion._id}</code> ({item.previousVersion.version} - {item.previousVersion.category})
+                            <strong>Parent:</strong> <code>{item.previousVersion._id || item.previousVersion}</code>
                           </span>
                         ) : (
                           <span className="genesis-block">
@@ -157,3 +229,4 @@ const VersionHistoryPage = ({ componentId, onNavigate, currentUser }) => {
 };
 
 export default VersionHistoryPage;
+

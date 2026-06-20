@@ -1,5 +1,8 @@
 const Component = require('../models/Component');
 const Data = require('../models/Data');
+const Dependency = require('../models/Dependency');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 
 // Create a new Component
 exports.createComponent = async (req, res) => {
@@ -178,12 +181,19 @@ exports.uploadFile = async (req, res) => {
 
     await newData.save();
 
-    // Push into Component's dataHistory array
+    // Push into Component's dataHistory array and reset status to Active
+    component.status = 'Active';
     component.dataHistory.push(newData._id);
     await component.save();
 
-    // BFS graph traversal to find affected components
-    const affectedComponents = await getAffectedComponents(id);
+    // Determine affected components and generate notifications if category is Design Data
+    let affectedComponents = [];
+    if (category === 'Design Data') {
+      affectedComponents = await handleDesignChangeNotifications(id, component.name, versionStr);
+    } else {
+      // Fallback to connected components BFS for other types of data if needed
+      affectedComponents = await getAffectedComponents(id);
+    }
 
     // Populate creator detail on return
     await newData.populate('uploadedBy', 'name email role');
@@ -197,6 +207,7 @@ exports.uploadFile = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 // Get version history chain of a component
 exports.getVersionHistory = async (req, res) => {
@@ -268,3 +279,88 @@ async function getAffectedComponents(startComponentId) {
 
   return affected;
 }
+
+// Helper function: BFS to find affected components in the new Dependency table and generate notifications
+async function handleDesignChangeNotifications(sourceComponentId, sourceComponentName, versionStr) {
+  // BFS to find all affected dependent components
+  const allDeps = await Dependency.find()
+    .populate('sourceComponent', 'name type')
+    .populate('dependentComponent', 'name type');
+
+  const adjList = {};
+  allDeps.forEach(dep => {
+    if (!dep.sourceComponent || !dep.dependentComponent) return;
+    const srcId = dep.sourceComponent._id.toString();
+    if (!adjList[srcId]) {
+      adjList[srcId] = [];
+    }
+    adjList[srcId].push({
+      id: dep.dependentComponent._id.toString(),
+      name: dep.dependentComponent.name,
+      type: dep.dependentComponent.type,
+      impactLevel: dep.impactLevel
+    });
+  });
+
+  const queue = [sourceComponentId.toString()];
+  const visited = new Set([sourceComponentId.toString()]);
+  const affected = [];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    const neighbors = adjList[currentId] || [];
+
+    for (const neighbor of neighbors) {
+      if (!visited.has(neighbor.id)) {
+        visited.add(neighbor.id);
+        queue.push(neighbor.id);
+        
+        affected.push({
+          _id: neighbor.id,
+          name: neighbor.name,
+          type: neighbor.type,
+          impactLevel: neighbor.impactLevel
+        });
+
+        // 1. Find manufacturers assigned to this component
+        const manufacturers = await User.find({
+          role: 'Manufacturer',
+          assignedComponent: neighbor.id
+        });
+
+        const message = `${neighbor.name} may be affected due to changes in ${sourceComponentName} Design (${versionStr}). Please review and update your component.`;
+
+        if (manufacturers.length > 0) {
+          for (const mfg of manufacturers) {
+            const notif = new Notification({
+              sourceComponent: sourceComponentId,
+              affectedComponent: neighbor.id,
+              uploadedVersion: versionStr,
+              message,
+              status: 'Unread',
+              recipient: mfg._id
+            });
+            await notif.save();
+          }
+        } else {
+          // Store system-wide notification with recipient null so admins/viewers see it
+          const notif = new Notification({
+            sourceComponent: sourceComponentId,
+            affectedComponent: neighbor.id,
+            uploadedVersion: versionStr,
+            message,
+            status: 'Unread',
+            recipient: null
+          });
+          await notif.save();
+        }
+
+        // Mark the affected component as "Review Required"
+        await Component.findByIdAndUpdate(neighbor.id, { status: 'Review Required' });
+      }
+    }
+  }
+
+  return affected;
+}
+

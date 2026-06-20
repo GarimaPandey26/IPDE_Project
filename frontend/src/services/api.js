@@ -91,6 +91,47 @@ export const getVersionHistory = async (id) => {
   return response.data;
 };
 
+// Dependency Endpoints
+export const getDependencies = async () => {
+  const response = await api.get('/dependencies');
+  return response.data;
+};
+
+export const createDependency = async (sourceComponentId, dependentComponentId, impactLevel) => {
+  const response = await api.post('/dependencies', {
+    sourceComponentId,
+    dependentComponentId,
+    impactLevel
+  });
+  return response.data;
+};
+
+export const deleteDependency = async (id) => {
+  const response = await api.delete(`/dependencies/${id}`);
+  return response.data;
+};
+
+export const getImpactAnalysis = async (componentId) => {
+  const response = await api.get(`/dependencies/impact/${componentId}`);
+  return response.data;
+};
+
+// Notification Endpoints
+export const getNotifications = async () => {
+  const response = await api.get('/notifications');
+  return response.data;
+};
+
+export const getUnreadNotificationsCount = async () => {
+  const response = await api.get('/notifications/badge');
+  return response.data;
+};
+
+export const markNotificationAsRead = async (id) => {
+  const response = await api.put(`/notifications/${id}/read`);
+  return response.data;
+};
+
 export default {
   login,
   register,
@@ -100,4 +141,12 @@ export default {
   connectComponents,
   uploadFile,
   getVersionHistory,
+  getDependencies,
+  createDependency,
+  deleteDependency,
+  getImpactAnalysis,
+  getNotifications,
+  getUnreadNotificationsCount,
+  markNotificationAsRead,
 };
+

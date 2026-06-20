@@ -39,13 +39,25 @@ const UploadPage = ({ preSelectedComponentId, onNavigate, currentUser }) => {
     }
   };
 
-  // Enforce manufacturer authorization locally
-  const isAssigned = selectedCompId && 
-    currentUser.role === 'Manufacturer' && 
-    currentUser.assignedComponent && 
-    (currentUser.assignedComponent._id === selectedCompId || currentUser.assignedComponent === selectedCompId);
+  // Enforce hierarchical manufacturer permissions: check parent component chain
+  const checkWriteAccess = (user, compId) => {
+    if (!user || !compId) return false;
+    if (user.role === 'Admin') return true;
+    if (user.role === 'Viewer') return false;
+    if (user.role === 'Manufacturer') {
+      const assignedId = user.assignedComponent?._id || user.assignedComponent;
+      if (!assignedId) return false;
+      let currentId = compId;
+      while (currentId) {
+        if (currentId === assignedId) return true;
+        const comp = components.find(c => c._id === currentId);
+        currentId = comp && comp.parent ? (comp.parent._id || comp.parent) : null;
+      }
+    }
+    return false;
+  };
 
-  const hasWriteAccess = currentUser.role === 'Admin' || isAssigned;
+  const hasWriteAccess = checkWriteAccess(currentUser, selectedCompId);
 
   const handleUpload = async (e) => {
     e.preventDefault();

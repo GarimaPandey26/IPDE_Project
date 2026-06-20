@@ -8,6 +8,8 @@ const connectDB = async () => {
 };
 const componentRoutes = require('./routes/componentRoutes');
 const authRoutes = require('./routes/authRoutes');
+const dependencyRoutes = require('./routes/dependencyRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +28,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/components', componentRoutes);
+app.use('/api/dependencies', dependencyRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Serve Frontend in Production
 if (process.env.NODE_ENV === 'production') {

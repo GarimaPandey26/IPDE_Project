@@ -27,8 +27,13 @@ const TreeNode = ({ node, selectedNodeId, onSelectNode, expandedNodes, onToggleE
         <span className="tree-node-icon">
           {node.type === 'Module' ? '📁' : node.type === 'Sub-module' ? '📂' : '⚙️'}
         </span>
-        <span className="tree-node-label" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span className="tree-node-label" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           {node.name}
+          {node.status === 'Review Required' && (
+            <span className="status-warning-pill" style={{ color: 'var(--warning)', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.65rem', padding: '0.1rem 0.3rem', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
+              ⚠️ Review Required
+            </span>
+          )}
         </span>
       </div>
       {hasChildren && isExpanded && (
@@ -83,6 +88,11 @@ const Dashboard = ({ onNavigate, currentUser }) => {
     try {
       const data = await getComponents();
       setComponents(data);
+      // Keep selected node details updated with database status changes
+      if (selectedNode) {
+        const updated = data.find(c => c._id === selectedNode._id);
+        if (updated) setSelectedNode(updated);
+      }
     } catch (err) {
       setError('Failed to fetch components. Is backend server running?');
     } finally {
@@ -180,13 +190,27 @@ const Dashboard = ({ onNavigate, currentUser }) => {
     return `Naval Surface Surveillance Radar ➔ ${path}`;
   };
 
-  // Enforce Manufacturer Permission check
-  const isAssignedManufacturer = selectedNode && 
-    currentUser.role === 'Manufacturer' && 
-    currentUser.assignedComponent && 
-    (currentUser.assignedComponent._id === selectedNode._id || currentUser.assignedComponent === selectedNode._id);
+  // Enforce hierarchical manufacturer permissions: check parent component chain
+  const checkWriteAccess = (user, node) => {
+    if (!user || !node) return false;
+    if (user.role === 'Admin') return true;
+    if (user.role === 'Viewer') return false;
+    if (user.role === 'Manufacturer') {
+      const assignedId = user.assignedComponent?._id || user.assignedComponent;
+      if (!assignedId) return false;
+      let current = node;
+      while (current) {
+        const currentId = current._id || current;
+        if (currentId === assignedId) return true;
+        
+        const parentId = current.parent?._id || current.parent;
+        current = parentId ? components.find(c => c._id === parentId) : null;
+      }
+    }
+    return false;
+  };
 
-  const hasWriteAccess = currentUser.role === 'Admin' || isAssignedManufacturer;
+  const hasWriteAccess = checkWriteAccess(currentUser, selectedNode);
 
   // Filter files belonging to active component & category tab
   const getTabFiles = () => {
@@ -277,6 +301,7 @@ const Dashboard = ({ onNavigate, currentUser }) => {
                   <div className="detail-subtitle-row">
                     <span><strong>Type:</strong> {selectedNode.type}</span>
                     <span><strong>Classification:</strong> <span className="text-highlight">{selectedNode.category}</span></span>
+                    <span><strong>Status:</strong> <span className={selectedNode.status === 'Review Required' ? 'text-highlight' : 'diff-positive'} style={{ fontWeight: 'bold' }}>{selectedNode.status || 'Active'}</span></span>
                   </div>
                   <p className="subtitle" style={{ fontSize: '0.8rem', marginTop: '0.5rem', fontFamily: 'monospace' }}>
                     {buildBreadcrumb(selectedNode)}
@@ -302,9 +327,16 @@ const Dashboard = ({ onNavigate, currentUser }) => {
               </div>
 
               {/* Warnings / Permissions Info */}
-              {!isAssignedManufacturer && currentUser.role === 'Manufacturer' && (
+              {selectedNode.status === 'Review Required' && (
+                <div className="alert alert-error" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>
+                  <span>⚠️ <strong>Attention:</strong> This component is currently marked as <strong>"Review Required"</strong> due to changes in its upstream dependencies.</span>
+                  {hasWriteAccess && <span>Please review the design modifications and upload a revised version to return it to Active status.</span>}
+                </div>
+              )}
+
+              {!hasWriteAccess && currentUser.role === 'Manufacturer' && (
                 <div className="alert" style={{ backgroundColor: 'rgba(245, 158, 11, 0.05)', borderColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)', fontSize: '0.85rem', margin: 0 }}>
-                  🛡️ You are registered as the manufacturer for <strong>{currentUser.assignedComponent?.name || 'Unassigned'}</strong>. You have view-only access to this module.
+                  🛡️ You are registered as the manufacturer for <strong>{currentUser.assignedComponent?.name || 'Unassigned'}</strong>. You have view-only access to this component/subcomponent.
                 </div>
               )}
 

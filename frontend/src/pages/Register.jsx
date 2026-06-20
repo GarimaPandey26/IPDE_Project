@@ -147,7 +147,7 @@ const Register = ({ onAuthSuccess, onNavigateToLogin }) => {
 
           {role === 'Manufacturer' && (
             <div className="form-group animate-fade-in">
-              <label htmlFor="component-select">Which component/module/sub-module do you manufacture?</label>
+              <label htmlFor="component-select">Which main component do you manufacture?</label>
               <select
                 id="component-select"
                 value={assignedComponentId}
@@ -155,12 +155,14 @@ const Register = ({ onAuthSuccess, onNavigateToLogin }) => {
                 disabled={loading}
                 required
               >
-                <option value="">-- Select Component from Radar MBPS Hierarchy --</option>
-                {components.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {getComponentPath(c)}
-                  </option>
-                ))}
+                <option value="">-- Select Main Component --</option>
+                {components
+                  .filter((c) => c.type === 'Module')
+                  .map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}
