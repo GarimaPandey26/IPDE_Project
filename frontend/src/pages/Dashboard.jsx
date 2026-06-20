@@ -236,7 +236,7 @@ const Dashboard = ({ onNavigate, currentUser }) => {
         <div className="dashboard-sidebar">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '0.25rem' }}>
             <h3 style={{ margin: 0 }}>Radar Hierarchy</h3>
-            {currentUser.role === 'Admin' && (
+            {(currentUser.role === 'Admin' || currentUser.role === 'Manufacturer') && (
               <button 
                 className="btn btn-primary" 
                 style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', boxShadow: 'none' }}
@@ -414,6 +414,8 @@ const Dashboard = ({ onNavigate, currentUser }) => {
         onClose={() => setIsCreateOpen(false)}
         onComponentCreated={fetchComponents}
         defaultParentId={selectedNode?._id}
+        currentUser={currentUser}
+        allComponents={components}
       />
       <ConnectComponentModal
         isOpen={isConnectOpen}

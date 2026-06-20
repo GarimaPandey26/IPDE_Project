@@ -7,10 +7,6 @@ const User = require('../models/User');
 // Create a new Component
 exports.createComponent = async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') {
-      return res.status(403).json({ error: 'Access Denied: Only Admins can add components to the system hierarchy' });
-    }
-
     const { name, type, category, parentId } = req.body;
 
     if (!name || !type || !category) {
@@ -19,6 +15,36 @@ exports.createComponent = async (req, res) => {
 
     if (!['Module', 'Sub-module', 'Component'].includes(type)) {
       return res.status(400).json({ error: 'Invalid component type' });
+    }
+
+    // Role-based validation
+    let isAuthorized = false;
+    if (req.user.role === 'Admin') {
+      isAuthorized = true;
+    } else if (req.user.role === 'Manufacturer') {
+      if (type === 'Module' || !parentId) {
+        return res.status(403).json({ error: 'Access Denied: Manufacturers cannot create root-level modules' });
+      }
+
+      // Verify the parentId is in the manufacturer's assigned component branch
+      const assignedId = req.user.assignedComponent?._id?.toString() || req.user.assignedComponent?.toString();
+      if (!assignedId) {
+        return res.status(403).json({ error: 'Access Denied: You do not have an assigned component' });
+      }
+
+      let currentId = parentId.toString();
+      while (currentId) {
+        if (currentId === assignedId) {
+          isAuthorized = true;
+          break;
+        }
+        const comp = await Component.findById(currentId);
+        currentId = comp && comp.parent ? comp.parent.toString() : null;
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Access Denied: You can only add subcomponents under your assigned main component hierarchy' });
     }
 
     const existingComponent = await Component.findOne({ name });

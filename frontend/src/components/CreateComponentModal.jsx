@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { createComponent, getComponents } from '../services/api';
+import { createComponent } from '../services/api';
 
-const CreateComponentModal = ({ isOpen, onClose, onComponentCreated, defaultParentId }) => {
+const CreateComponentModal = ({ isOpen, onClose, onComponentCreated, defaultParentId, currentUser, allComponents = [] }) => {
   const [name, setName] = useState('');
-  const [type, setType] = useState('Component');
+  const [type, setType] = useState('Sub-module');
   const [category, setCategory] = useState('Signal Processing Components');
   const [parentId, setParentId] = useState('');
-  const [components, setComponents] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,39 +24,90 @@ const CreateComponentModal = ({ isOpen, onClose, onComponentCreated, defaultPare
     'Maintenance Components'
   ];
 
+  // Filter components that a manufacturer is allowed to create subcomponents under
+  const getAllowedParents = () => {
+    if (currentUser?.role === 'Admin') {
+      return allComponents;
+    }
+    if (currentUser?.role === 'Manufacturer') {
+      const assignedId = currentUser.assignedComponent?._id || currentUser.assignedComponent;
+      if (!assignedId) return [];
+
+      return allComponents.filter(c => {
+        let currentId = c._id;
+        while (currentId) {
+          if (currentId === assignedId) return true;
+          const parentComp = allComponents.find(item => item._id === currentId);
+          currentId = parentComp && parentComp.parent ? (parentComp.parent._id || parentComp.parent) : null;
+        }
+        return false;
+      });
+    }
+    return [];
+  };
+
+  const allowedParents = getAllowedParents();
+
   useEffect(() => {
     if (isOpen) {
-      const fetchComponents = async () => {
-        try {
-          const data = await getComponents();
-          setComponents(data);
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      fetchComponents();
+      setError('');
+      setName('');
       
-      // Set default parent if provided
+      const assignedId = currentUser?.assignedComponent?._id || currentUser?.assignedComponent;
+      
+      // Determine default parent ID
+      let finalParentId = '';
       if (defaultParentId) {
-        setParentId(defaultParentId);
-        // Automatically default type to child level
-        const parentComp = components.find(c => c._id === defaultParentId);
+        // If defaultParentId is in the manufacturer's branch
+        const isAllowed = allowedParents.some(p => p._id === defaultParentId);
+        if (isAllowed || currentUser?.role === 'Admin') {
+          finalParentId = defaultParentId;
+        } else if (currentUser?.role === 'Manufacturer' && assignedId) {
+          finalParentId = assignedId;
+        }
+      } else if (currentUser?.role === 'Manufacturer' && assignedId) {
+        finalParentId = assignedId;
+      }
+
+      setParentId(finalParentId);
+
+      // Default type and category based on parent selection
+      if (finalParentId) {
+        const parentComp = allComponents.find(c => c._id === finalParentId);
         if (parentComp) {
           setType(parentComp.type === 'Module' ? 'Sub-module' : 'Component');
           setCategory(parentComp.category);
         }
       } else {
-        setParentId('');
+        setType(currentUser?.role === 'Admin' ? 'Module' : 'Sub-module');
+        setCategory(categories[0]);
       }
     }
-  }, [isOpen, defaultParentId]);
+  }, [isOpen, defaultParentId, allComponents, currentUser]);
 
   if (!isOpen) return null;
+
+  // Handle parent changes to auto-update type and category defaults
+  const handleParentChange = (newParentId) => {
+    setParentId(newParentId);
+    if (newParentId) {
+      const parentComp = allComponents.find(c => c._id === newParentId);
+      if (parentComp) {
+        setType(parentComp.type === 'Module' ? 'Sub-module' : 'Component');
+        setCategory(parentComp.category);
+      }
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Component name is required');
+      return;
+    }
+
+    if (currentUser?.role === 'Manufacturer' && !parentId) {
+      setError('Manufacturers must select a parent component under their assigned main module.');
       return;
     }
 
@@ -112,7 +162,7 @@ const CreateComponentModal = ({ isOpen, onClose, onComponentCreated, defaultPare
               onChange={(e) => setType(e.target.value)}
               disabled={loading}
             >
-              <option value="Module">Module (Root level)</option>
+              {currentUser?.role === 'Admin' && <option value="Module">Module (Root level)</option>}
               <option value="Sub-module">Sub-module (Mid level)</option>
               <option value="Component">Component (Leaf level)</option>
             </select>
@@ -137,11 +187,12 @@ const CreateComponentModal = ({ isOpen, onClose, onComponentCreated, defaultPare
             <select
               id="parent-select"
               value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
+              onChange={(e) => handleParentChange(e.target.value)}
               disabled={loading}
+              required={currentUser?.role === 'Manufacturer'}
             >
-              <option value="">-- No Parent (Root Module) --</option>
-              {components.map((c) => (
+              {currentUser?.role === 'Admin' && <option value="">-- No Parent (Root Module) --</option>}
+              {allowedParents.map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.name} ({c.type})
                 </option>
